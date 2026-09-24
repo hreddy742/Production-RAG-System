@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: p4_rag_postgres
+    environment:
+      POSTGRES_DB: p4_rag
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+
+  redis:
+    image: redis:7-alpine
+    container_name: p4_rag_redis
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: p4_rag_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: p4_rag_api
+    env_file:
+      - .env.example
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/p4_rag
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://ollama:11434
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: p4_rag_ui
+    environment:
+      API_BASE_URL: http://api:8000/api
+      STREAMLIT_SERVER_HEADLESS: "true"
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  ollama_data:
